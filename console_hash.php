@@ -5,7 +5,7 @@
  * Date: 22.11.16
  * Time: 11:31
  */
-
+//6669689
 $paramsArray = [
     'file'      => 'file'
     ,'host'     => 'host'
@@ -14,6 +14,7 @@ $paramsArray = [
     ,'user'     => 'user'
     ,'password' => 'password'
     ,'driver'   => 'driver'
+    ,'numstr'   => 'numstr'
 ];
 
 unset($argv[0]);
@@ -22,6 +23,10 @@ foreach ($argv as $v) {
     if(!empty($paramAr[0])) {
         $$paramsArray[$paramAr[0]] = $paramAr[1];
     }
+}
+
+if (count($argv) < count($paramsArray)) {
+    exit('Example: php /path/to/console_hash.php host=ip_address port=**** dbname=dbName user=user_db password=********* driver=pdo_driver numstr=* file=/path/to/test.txt'."\n");
 }
 
 if (!empty($driver) && !empty($host) && !empty($port) && !empty($dbname) && !empty($user)) {
@@ -42,10 +47,7 @@ if (!empty($driver) && !empty($host) && !empty($port) && !empty($dbname) && !emp
     switch ($driver) {
         case 'pgsql':
         default:
-            $dbconn = pg_connect('host='.$host.' port='.$port.' dbname='.$dbname.' user='.$user.' password='.$password);
-            $fetchRow = 'pg_fetch_row';
             $escapeStr = 'pg_escape_string';
-            $query = 'pg_query';
             break;
     }
 }
@@ -53,27 +55,35 @@ if (!empty($driver) && !empty($host) && !empty($port) && !empty($dbname) && !emp
 if (!empty($file)) {
     $file = fopen($file, 'rb');
     $i = 1;
+    $y = 1;
     while (($str2 = fgets($file, 4096)) !== false) {
-        $str2 =  str_replace(["\r","\n"],'', $str2);
-        $val = $escapeStr($str2);
-        @$queryData = $fetchRow(pg_query('.$dbconn.', "select name, rating from hashes where name=\'".$val."\'"));
-        if ($queryData[0]  !== $str2) {
-            // $sql = "INSERT INTO hashes (name, md5, sha1, crypt, base64, flag, domain)
-            $sql = "INSERT INTO hashes (name) VALUES ('" . $val . "')";
-            @$query($dbconn, $sql);
-            echo $i.') '.$str2."\n";
-            ++$i;
-        } else {
-            $sql = "update hashes set rating = " . ((int)$queryData[1]+1) ." where name = '".$val."'";
-            @$query($dbconn, $sql);
-            echo $i.') '.$str2."\n";
-            ++$i;
-        }
+        if (empty($numstr) || $numstr <= $i) {
+            $str2 =  str_replace(["\r","\n"],'', $str2);
+            $val = $escapeStr($str2);
+            $query = $dbh->prepare("select name, rating from hashes where name='".$val."'");
+            $query->execute();
+            $data = $query->fetchAll(PDO::FETCH_ASSOC);
 
+            if (!$data) {
+                $query = $dbh->prepare("INSERT INTO hashes (name) VALUES ('" . $val . "')");
+                $query->execute();
+                echo $i.') '.$str2."      NEW (all new : ".$y.")  \n";
+                ++$i;
+                ++$y;
+            } else {
+                $query = $dbh->prepare("update hashes set rating = " . ((int)$data[0]['rating']+1) ." where name = '".$val."'");
+                $query->execute();
+                echo $i.') '.$str2."\n";
+                ++$i;
+            }
+        } else {
+            echo ++$i."\n";
+        }
     }
     if (!feof($file)) {
         echo "Error: unexpected fgets() fail\n";
     }
     fclose($file);
     pg_close($dbconn);
+    echo "\n".'All new added in db '.$y."\n";
 }
